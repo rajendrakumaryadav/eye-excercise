@@ -25,7 +25,7 @@ fn draw_circle(frame: &mut [u8], width: u32, height: u32, cx: i32, cy: i32, r: i
 }
 
 fn run_overlay(duration: Duration) -> Result<(), pixels::Error> {
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().expect("Failed to create event loop");
     let monitor = event_loop
         .primary_monitor()
         .or_else(|| event_loop.available_monitors().next());
@@ -38,9 +38,9 @@ fn run_overlay(duration: Duration) -> Result<(), pixels::Error> {
         .with_title("Eye Guard")
         .with_fullscreen(Some(Fullscreen::Borderless(monitor)))
         .with_decorations(false)
-        .with_always_on_top(true)
         .build(&event_loop)
         .expect("Failed to create window");
+    window.set_always_on_top(true);
 
     let surface_texture = SurfaceTexture::new(size.width, size.height, &window);
     let mut pixels = Pixels::new(size.width, size.height, surface_texture)?;
@@ -52,11 +52,11 @@ fn run_overlay(duration: Duration) -> Result<(), pixels::Error> {
         *control_flow = ControlFlow::Poll;
         match event {
             Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-                *control_flow = ControlFlow::Exit;
+                *control_flow = ControlFlow::ExitWithCode(0);
             }
-            Event::MainEventsCleared => {
+            Event::AboutToWait => {
                 if start.elapsed() >= duration {
-                    *control_flow = ControlFlow::Exit;
+                    *control_flow = ControlFlow::ExitWithCode(0);
                 } else {
                     window.request_redraw();
                 }
@@ -91,5 +91,31 @@ async fn main() {
             .body("Time to rest your eyes!")
             .show();
         let _ = run_overlay(Duration::from_secs(25));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn draw_circle_colours_correct_pixels() {
+        let width = 10;
+        let height = 10;
+        let mut frame = vec![0u8; (width * height * 4) as usize];
+        let color = [1, 2, 3, 4];
+        draw_circle(&mut frame, width, height, 5, 5, 2, color);
+
+        for y in 0..height as i32 {
+            for x in 0..width as i32 {
+                let idx = ((y as u32 * width + x as u32) * 4) as usize;
+                let expected = if (x - 5).pow(2) + (y - 5).pow(2) <= 4 {
+                    color
+                } else {
+                    [0, 0, 0, 0]
+                };
+                assert_eq!(frame[idx..idx + 4], expected);
+            }
+        }
     }
 }
